@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.lazyswap.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["MultiPlayerGameModeMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

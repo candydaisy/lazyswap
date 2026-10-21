@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "lazyswap",
+  "version": "${version}",
+  "name": "LazySwap",
+  "description": "Hotbar attribute-swap emulation on attack, for private/practice testing.",
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.lazyswap.LazySwap"]
+  },
+  "mixins": ["lazyswap.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
