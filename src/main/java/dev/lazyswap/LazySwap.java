@@ -24,7 +24,6 @@ public class LazySwap implements ClientModInitializer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     static class Config {
-        int primarySlot = 0;
         int secondarySlot = 1;
         long switchDelayMs = 0; // 0 = same-tick pre-attack switch, >0 = post-hit delay
         boolean autoReturn = true;
@@ -34,6 +33,7 @@ public class LazySwap implements ClientModInitializer {
     static boolean enabled;
     private static long switchAt = -1; // wall-clock ms of a pending post-hit switch, -1 = none
     private static boolean awaitingReturn;
+    private static int returnSlot; // slot held when the attack started
 
     @Override
     public void onInitializeClient() {
@@ -54,10 +54,12 @@ public class LazySwap implements ClientModInitializer {
 
     /** Called at the head of MultiPlayerGameMode#attack, before the attack packet is built. */
     public static void onAttack(Player player) {
-        if (!enabled || player.getInventory().getSelectedSlot() != config.primarySlot) return;
+        int slot = player.getInventory().getSelectedSlot();
+        if (!enabled || slot == config.secondarySlot) return;
+        returnSlot = slot;
         if (config.switchDelayMs == 0) {
             // attack() calls ensureHasSentCarriedItem() next, so the slot packet goes out right before the attack packet.
-            select(player, config.primarySlot, config.secondarySlot);
+            select(player, returnSlot, config.secondarySlot);
         } else {
             switchAt = System.currentTimeMillis() + config.switchDelayMs;
         }
@@ -72,12 +74,12 @@ public class LazySwap implements ClientModInitializer {
         }
         if (switchAt >= 0 && System.currentTimeMillis() >= switchAt) {
             switchAt = -1;
-            select(player, config.primarySlot, config.secondarySlot);
+            select(player, returnSlot, config.secondarySlot);
         }
         // Return once the swing cooldown is full again; the game's tick sends the slot packet.
         if (awaitingReturn && player.getAttackStrengthScale(0f) >= 1f) {
             awaitingReturn = false;
-            if (player.getInventory().getSelectedSlot() == config.secondarySlot) player.getInventory().setSelectedSlot(config.primarySlot);
+            if (player.getInventory().getSelectedSlot() == config.secondarySlot) player.getInventory().setSelectedSlot(returnSlot);
         }
     }
 
@@ -102,7 +104,6 @@ public class LazySwap implements ClientModInitializer {
             LOG.error("Failed to load {}, using defaults", path, e);
             return new Config();
         }
-        c.primarySlot = Math.clamp(c.primarySlot, 0, 8);
         c.secondarySlot = Math.clamp(c.secondarySlot, 0, 8);
         c.switchDelayMs = Math.max(0, c.switchDelayMs);
         return c;
