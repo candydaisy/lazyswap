@@ -117,8 +117,10 @@ public class LazySwap implements ClientModInitializer {
             switchAt = -1;
             select(player, returnSlot, config.secondarySlot);
         }
-        // Return once the swing cooldown is full again; the game's tick sends the slot packet.
-        if (awaitingReturn && player.getAttackStrengthScale(0f) >= 1f) {
+        // Instant mode returns right after the attack packet went out, so every click swaps again;
+        // waiting for cooldown there meant spam-clicks on the secondary kept resetting it and never returned.
+        // Delay mode keeps the secondary until cooldown is full for the follow-up hit. Next game tick sends the slot packet.
+        if (awaitingReturn && (config.switchDelayMs == 0 || player.getAttackStrengthScale(0f) >= 1f)) {
             awaitingReturn = false;
             if (player.getInventory().getSelectedSlot() == config.secondarySlot) player.getInventory().setSelectedSlot(returnSlot);
         }
