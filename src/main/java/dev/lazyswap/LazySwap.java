@@ -3,8 +3,12 @@ package dev.lazyswap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.loader.api.FabricLoader;
@@ -19,17 +23,22 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
+
 public class LazySwap implements ClientModInitializer {
     private static final Logger LOG = LoggerFactory.getLogger("lazyswap");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     static class Config {
+        int primarySlot = -1; // -1 = swap from any slot
         int secondarySlot = 1;
         long switchDelayMs = 0; // 0 = same-tick pre-attack switch, >0 = post-hit delay
         boolean autoReturn = true;
     }
 
     static Config config = new Config();
+    private static Path configPath;
     static boolean enabled;
     private static long switchAt = -1; // wall-clock ms of a pending post-hit switch, -1 = none
     private static boolean awaitingReturn;
@@ -37,7 +46,8 @@ public class LazySwap implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        config = loadConfig(FabricLoader.getInstance().getConfigDir().resolve("lazyswap.json"));
+        configPath = FabricLoader.getInstance().getConfigDir().resolve("lazyswap.json");
+        config = loadConfig(configPath);
         KeyMapping toggle = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping("key.lazyswap.toggle", InputConstants.KEY_V, KeyMapping.Category.MISC));
 
@@ -50,12 +60,43 @@ public class LazySwap implements ClientModInitializer {
             }
             tick(mc);
         });
+
+        // Slots are 1-9 here to match the hotbar keys; the config file stores 0-8.
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, ctx) -> dispatcher.register(literal("lazyswap")
+                .executes(c -> show(c.getSource()))
+                .then(literal("primary")
+                        .then(literal("any").executes(c -> set(c.getSource(), () -> config.primarySlot = -1)))
+                        .then(argument("slot", IntegerArgumentType.integer(1, 9))
+                                .executes(c -> set(c.getSource(), () -> config.primarySlot = IntegerArgumentType.getInteger(c, "slot") - 1))))
+                .then(literal("secondary")
+                        .then(argument("slot", IntegerArgumentType.integer(1, 9))
+                                .executes(c -> set(c.getSource(), () -> config.secondarySlot = IntegerArgumentType.getInteger(c, "slot") - 1))))
+                .then(literal("swapback")
+                        .then(argument("value", BoolArgumentType.bool())
+                                .executes(c -> set(c.getSource(), () -> config.autoReturn = BoolArgumentType.getBool(c, "value")))))));
+    }
+
+    private static int set(FabricClientCommandSource source, Runnable change) {
+        change.run();
+        try {
+            Files.writeString(configPath, GSON.toJson(config));
+        } catch (IOException e) {
+            LOG.error("Failed to save {}", configPath, e);
+            source.sendError(Component.literal("LazySwap: couldn't save config, change applies until restart"));
+        }
+        return show(source);
+    }
+
+    private static int show(FabricClientCommandSource source) {
+        source.sendFeedback(Component.literal("LazySwap: primary=" + (config.primarySlot < 0 ? "any" : config.primarySlot + 1)
+                + " secondary=" + (config.secondarySlot + 1) + " swapback=" + config.autoReturn));
+        return 1;
     }
 
     /** Called at the head of MultiPlayerGameMode#attack, before the attack packet is built. */
     public static void onAttack(Player player) {
         int slot = player.getInventory().getSelectedSlot();
-        if (!enabled || slot == config.secondarySlot) return;
+        if (!enabled || slot == config.secondarySlot || (config.primarySlot >= 0 && slot != config.primarySlot)) return;
         returnSlot = slot;
         if (config.switchDelayMs == 0) {
             // attack() calls ensureHasSentCarriedItem() next, so the slot packet goes out right before the attack packet.
@@ -104,6 +145,7 @@ public class LazySwap implements ClientModInitializer {
             LOG.error("Failed to load {}, using defaults", path, e);
             return new Config();
         }
+        c.primarySlot = Math.clamp(c.primarySlot, -1, 8);
         c.secondarySlot = Math.clamp(c.secondarySlot, 0, 8);
         c.switchDelayMs = Math.max(0, c.switchDelayMs);
         return c;
