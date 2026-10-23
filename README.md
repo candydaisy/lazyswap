@@ -30,17 +30,20 @@ While it's on, attacking a mob or player follows your **rules**. A rule says "wh
 
 Attacking from a slot with no rule does nothing. The default is one rule, `1 -> 2`.
 
+Swinging at air doesn't swap unless you turn it on with `/lazyswap miss true`.
+
 ## Commands
 
 Slots are numbered 1–9, the same as the hotbar keys.
 
 | Command | What it does |
 |---|---|
-| `/lazyswap` | Show your rules and the swapback setting |
+| `/lazyswap` | Show your rules and the swapback and miss settings |
 | `/lazyswap rule add <from> -> <to>` | Add a rule, e.g. `/lazyswap rule add 1,5 -> 2,3`. The `->` and `[ ]` are optional. |
 | `/lazyswap rule remove <slot>` | Stop that slot from triggering a swap |
 | `/lazyswap rule clear` | Remove every rule |
 | `/lazyswap swapback <true\|false>` | Switch back to the slot you had before |
+| `/lazyswap miss <true\|false>` | Also swap when you swing at air (default `false`) |
 
 Each slot can trigger only one rule. Adding a rule for a slot that's already used moves that slot to the new rule. Changes are saved straight away.
 
@@ -55,7 +58,8 @@ The settings live in `.minecraft/config/lazyswap.json`, which is created the fir
     { "from": [3], "to": [4, 3] }
   ],
   "switchDelayMs": 0,
-  "autoReturn": true
+  "autoReturn": true,
+  "swapOnMiss": false
 }
 ```
 
@@ -63,6 +67,7 @@ The settings live in `.minecraft/config/lazyswap.json`, which is created the fir
 |---|---|
 | `rules` | List of rules. `from` holds the slots that trigger the rule; `to` holds the slots it swaps to, cycling one per hit. |
 | `switchDelayMs` | `0` swaps before the hit, so the hit uses the target item. More than `0` lands the hit with your current item, then swaps after that many milliseconds for a follow-up hit. One game tick is 50 ms. |
+| `swapOnMiss` | Also follow the rules when the swing hits air, not just a mob or player. |
 | `autoReturn` | Switch back afterwards. With a delay of `0` it switches back right after the hit. With a delay, it switches back once the attack cooldown is full. |
 
 `switchDelayMs` has no command yet. Edit the file and restart the game to change it.

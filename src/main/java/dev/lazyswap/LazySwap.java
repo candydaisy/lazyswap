@@ -60,6 +60,7 @@ public class LazySwap implements ClientModInitializer {
         List<Rule> rules = new ArrayList<>(List.of(new Rule(new ArrayList<>(List.of(0)), new ArrayList<>(List.of(1)))));
         long switchDelayMs = 0; // 0 = same-tick pre-attack switch, >0 = post-hit delay
         boolean autoReturn = true;
+        boolean swapOnMiss = false; // also swap when the attack hits air
     }
 
     static Config config = new Config();
@@ -109,7 +110,10 @@ public class LazySwap implements ClientModInitializer {
                         .then(literal("clear").executes(c -> set(c.getSource(), () -> config.rules.clear()))))
                 .then(literal("swapback")
                         .then(argument("value", BoolArgumentType.bool())
-                                .executes(c -> set(c.getSource(), () -> config.autoReturn = BoolArgumentType.getBool(c, "value")))))));
+                                .executes(c -> set(c.getSource(), () -> config.autoReturn = BoolArgumentType.getBool(c, "value")))))
+                .then(literal("miss")
+                        .then(argument("value", BoolArgumentType.bool())
+                                .executes(c -> set(c.getSource(), () -> config.swapOnMiss = BoolArgumentType.getBool(c, "value")))))));
     }
 
     /** Parses "1,5 -> 2,3" or "1,5 2,3" (also accepts [brackets]); slots are 1-9 and come back as 0-8. */
@@ -156,7 +160,7 @@ public class LazySwap implements ClientModInitializer {
     }
 
     private static int show(FabricClientCommandSource source) {
-        source.sendFeedback(Component.literal("LazySwap: swapback=" + config.autoReturn
+        source.sendFeedback(Component.literal("LazySwap: swapback=" + config.autoReturn + ", miss=" + config.swapOnMiss
                 + (config.rules.isEmpty() ? ", no rules" : ", rules: " + config.rules.stream().map(Rule::toString).collect(Collectors.joining("  ")))));
         return 1;
     }
@@ -177,6 +181,13 @@ public class LazySwap implements ClientModInitializer {
         } else {
             switchAt = System.currentTimeMillis() + config.switchDelayMs;
         }
+    }
+
+    /** Called when an attack hits air; returns whether onAttack ran. */
+    public static boolean onMiss(Player player) {
+        if (!config.swapOnMiss) return false;
+        onAttack(player);
+        return true;
     }
 
     private static void tick(Minecraft mc) {
